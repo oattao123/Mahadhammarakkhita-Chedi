@@ -1,10 +1,15 @@
 import Database from 'better-sqlite3';
 import path from 'path';
+import fs from 'fs';
 
-const DB_PATH = path.join(process.cwd(), 'data', 'dhamma.db');
+// On Vercel (serverless), the filesystem is read-only except /tmp
+// Use /tmp for the database so SQLite can create WAL/SHM files
+const isVercel = !!process.env.VERCEL;
+const DB_PATH = isVercel
+  ? path.join('/tmp', 'dhamma.db')
+  : path.join(process.cwd(), 'data', 'dhamma.db');
 
 // Ensure data directory exists
-import fs from 'fs';
 const dataDir = path.dirname(DB_PATH);
 if (!fs.existsSync(dataDir)) {
   fs.mkdirSync(dataDir, { recursive: true });
