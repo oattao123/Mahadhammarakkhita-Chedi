@@ -72,7 +72,7 @@ export async function GET(req: NextRequest) {
     }
 
     // Find or create user in DB, then create session
-    const user = upsertGoogleUser(googleUser.id, googleUser.email, googleUser.name);
+    const user = await upsertGoogleUser(googleUser.id, googleUser.email, googleUser.name);
     await createSession({
       id: user.id,
       name: user.name,

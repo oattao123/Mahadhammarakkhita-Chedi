@@ -13,7 +13,7 @@ export async function POST(req: Request) {
     );
   }
 
-  const user = getUserByEmail(email);
+  const user = await getUserByEmail(email);
   if (!user) {
     return NextResponse.json(
       { error: 'อีเมลหรือรหัสผ่านไม่ถูกต้อง' },

@@ -16,13 +16,13 @@ export async function GET(
 
   const { id } = await params;
   const conversationId = parseInt(id);
-  const conversation = getConversation(conversationId);
+  const conversation = await getConversation(conversationId);
 
   if (!conversation || conversation.user_id !== user.id) {
     return NextResponse.json({ error: 'Not found' }, { status: 404 });
   }
 
-  const messages = getConversationMessages(conversationId);
+  const messages = await getConversationMessages(conversationId);
   return NextResponse.json({ messages });
 }
 
@@ -35,19 +35,19 @@ export async function POST(
 
   const { id } = await params;
   const conversationId = parseInt(id);
-  const conversation = getConversation(conversationId);
+  const conversation = await getConversation(conversationId);
 
   if (!conversation || conversation.user_id !== user.id) {
     return NextResponse.json({ error: 'Not found' }, { status: 404 });
   }
 
   const { role, content, updateTitle } = await req.json();
-  const message = addMessage(conversationId, role, content);
+  const message = await addMessage(conversationId, role, content);
 
   // Auto-update title from first user message
   if (updateTitle && role === 'user') {
     const title = content.slice(0, 50) + (content.length > 50 ? '...' : '');
-    updateConversationTitle(conversationId, title);
+    await updateConversationTitle(conversationId, title);
   }
 
   return NextResponse.json({ message });

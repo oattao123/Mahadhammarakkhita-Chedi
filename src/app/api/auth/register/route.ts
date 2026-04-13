@@ -20,7 +20,7 @@ export async function POST(req: Request) {
     );
   }
 
-  const existing = getUserByEmail(email);
+  const existing = await getUserByEmail(email);
   if (existing) {
     return NextResponse.json(
       { error: 'อีเมลนี้ถูกใช้งานแล้ว' },
@@ -29,7 +29,7 @@ export async function POST(req: Request) {
   }
 
   const passwordHash = await bcrypt.hash(password, 10);
-  const user = createUser(name, email, passwordHash);
+  const user = await createUser(name, email, passwordHash);
 
   await createSession({
     id: user.id,

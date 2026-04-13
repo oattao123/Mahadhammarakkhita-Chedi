@@ -1,61 +1,10 @@
-import Database from 'better-sqlite3';
-import path from 'path';
-import fs from 'fs';
+import { createClient } from '@supabase/supabase-js';
 
-// On Vercel (serverless), the filesystem is read-only except /tmp
-// Use /tmp for the database so SQLite can create WAL/SHM files
-const isVercel = !!process.env.VERCEL;
-const DB_PATH = isVercel
-  ? path.join('/tmp', 'dhamma.db')
-  : path.join(process.cwd(), 'data', 'dhamma.db');
+const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL!;
+const supabaseServiceKey = process.env.SUPABASE_SERVICE_ROLE_KEY!;
 
-// Ensure data directory exists
-const dataDir = path.dirname(DB_PATH);
-if (!fs.existsSync(dataDir)) {
-  fs.mkdirSync(dataDir, { recursive: true });
-}
-
-const db = new Database(DB_PATH);
-
-// Enable WAL mode for better performance
-db.pragma('journal_mode = WAL');
-db.pragma('foreign_keys = ON');
-
-// Create tables
-db.exec(`
-  CREATE TABLE IF NOT EXISTS users (
-    id INTEGER PRIMARY KEY AUTOINCREMENT,
-    name TEXT NOT NULL,
-    email TEXT UNIQUE NOT NULL,
-    password_hash TEXT NOT NULL,
-    role TEXT DEFAULT 'user',
-    created_at TEXT DEFAULT (datetime('now'))
-  );
-
-  CREATE TABLE IF NOT EXISTS conversations (
-    id INTEGER PRIMARY KEY AUTOINCREMENT,
-    user_id INTEGER NOT NULL,
-    title TEXT NOT NULL DEFAULT 'สนทนาใหม่',
-    created_at TEXT DEFAULT (datetime('now')),
-    updated_at TEXT DEFAULT (datetime('now')),
-    FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE
-  );
-
-  CREATE TABLE IF NOT EXISTS messages (
-    id INTEGER PRIMARY KEY AUTOINCREMENT,
-    conversation_id INTEGER NOT NULL,
-    role TEXT NOT NULL,
-    content TEXT NOT NULL,
-    created_at TEXT DEFAULT (datetime('now')),
-    FOREIGN KEY (conversation_id) REFERENCES conversations(id) ON DELETE CASCADE
-  );
-
-  CREATE INDEX IF NOT EXISTS idx_conversations_user ON conversations(user_id);
-  CREATE INDEX IF NOT EXISTS idx_messages_conversation ON messages(conversation_id);
-`);
-
-// Migration: add google_id column for OAuth users
-try { db.exec('ALTER TABLE users ADD COLUMN google_id TEXT'); } catch { /* already exists */ }
+// Use service_role key for server-side operations (bypasses RLS)
+const supabase = createClient(supabaseUrl, supabaseServiceKey);
 
 // ==================== User operations ====================
 
@@ -69,40 +18,78 @@ export interface User {
   created_at: string;
 }
 
-export function createUser(name: string, email: string, passwordHash: string): User {
-  const stmt = db.prepare(
-    'INSERT INTO users (name, email, password_hash) VALUES (?, ?, ?)'
-  );
-  const result = stmt.run(name, email, passwordHash);
-  return getUserById(result.lastInsertRowid as number)!;
+export async function createUser(name: string, email: string, passwordHash: string): Promise<User> {
+  const { data, error } = await supabase
+    .from('users')
+    .insert({ name, email, password_hash: passwordHash })
+    .select()
+    .single();
+
+  if (error) throw new Error(`Failed to create user: ${error.message}`);
+  return data as User;
 }
 
-export function getUserByEmail(email: string): User | undefined {
-  return db.prepare('SELECT * FROM users WHERE email = ?').get(email) as User | undefined;
+export async function getUserByEmail(email: string): Promise<User | undefined> {
+  const { data, error } = await supabase
+    .from('users')
+    .select('*')
+    .eq('email', email)
+    .single();
+
+  if (error && error.code !== 'PGRST116') {
+    // PGRST116 = "no rows returned" — that's expected when user doesn't exist
+    throw new Error(`Failed to get user: ${error.message}`);
+  }
+  return (data as User) ?? undefined;
 }
 
-export function getUserById(id: number): User | undefined {
-  return db.prepare('SELECT * FROM users WHERE id = ?').get(id) as User | undefined;
+export async function getUserById(id: number): Promise<User | undefined> {
+  const { data, error } = await supabase
+    .from('users')
+    .select('*')
+    .eq('id', id)
+    .single();
+
+  if (error && error.code !== 'PGRST116') {
+    throw new Error(`Failed to get user: ${error.message}`);
+  }
+  return (data as User) ?? undefined;
 }
 
 /** Find or create a user via Google OAuth. Links to existing account by email if found. */
-export function upsertGoogleUser(googleId: string, email: string, name: string): User {
+export async function upsertGoogleUser(googleId: string, email: string, name: string): Promise<User> {
   // Check by google_id first
-  const byGoogleId = db.prepare('SELECT * FROM users WHERE google_id = ?').get(googleId) as User | undefined;
-  if (byGoogleId) return byGoogleId;
+  const { data: byGoogleId } = await supabase
+    .from('users')
+    .select('*')
+    .eq('google_id', googleId)
+    .single();
+
+  if (byGoogleId) return byGoogleId as User;
 
   // Check by email — link existing account
-  const byEmail = getUserByEmail(email);
+  const byEmail = await getUserByEmail(email);
   if (byEmail) {
-    db.prepare('UPDATE users SET google_id = ? WHERE id = ?').run(googleId, byEmail.id);
-    return getUserById(byEmail.id)!;
+    const { data, error } = await supabase
+      .from('users')
+      .update({ google_id: googleId })
+      .eq('id', byEmail.id)
+      .select()
+      .single();
+
+    if (error) throw new Error(`Failed to link Google account: ${error.message}`);
+    return data as User;
   }
 
   // Create new user (no password for OAuth-only accounts)
-  const result = db.prepare(
-    'INSERT INTO users (name, email, password_hash, google_id) VALUES (?, ?, ?, ?)'
-  ).run(name, email, '', googleId);
-  return getUserById(result.lastInsertRowid as number)!;
+  const { data, error } = await supabase
+    .from('users')
+    .insert({ name, email, password_hash: '', google_id: googleId })
+    .select()
+    .single();
+
+  if (error) throw new Error(`Failed to create Google user: ${error.message}`);
+  return data as User;
 }
 
 // ==================== Conversation operations ====================
@@ -115,32 +102,58 @@ export interface Conversation {
   updated_at: string;
 }
 
-export function createConversation(userId: number, title: string = 'สนทนาใหม่'): Conversation {
-  const stmt = db.prepare(
-    'INSERT INTO conversations (user_id, title) VALUES (?, ?)'
-  );
-  const result = stmt.run(userId, title);
-  return getConversation(result.lastInsertRowid as number)!;
+export async function createConversation(userId: number, title: string = 'สนทนาใหม่'): Promise<Conversation> {
+  const { data, error } = await supabase
+    .from('conversations')
+    .insert({ user_id: userId, title })
+    .select()
+    .single();
+
+  if (error) throw new Error(`Failed to create conversation: ${error.message}`);
+  return data as Conversation;
 }
 
-export function getConversation(id: number): Conversation | undefined {
-  return db.prepare('SELECT * FROM conversations WHERE id = ?').get(id) as Conversation | undefined;
+export async function getConversation(id: number): Promise<Conversation | undefined> {
+  const { data, error } = await supabase
+    .from('conversations')
+    .select('*')
+    .eq('id', id)
+    .single();
+
+  if (error && error.code !== 'PGRST116') {
+    throw new Error(`Failed to get conversation: ${error.message}`);
+  }
+  return (data as Conversation) ?? undefined;
 }
 
-export function getUserConversations(userId: number): Conversation[] {
-  return db.prepare(
-    'SELECT * FROM conversations WHERE user_id = ? ORDER BY updated_at DESC'
-  ).all(userId) as Conversation[];
+export async function getUserConversations(userId: number): Promise<Conversation[]> {
+  const { data, error } = await supabase
+    .from('conversations')
+    .select('*')
+    .eq('user_id', userId)
+    .order('updated_at', { ascending: false });
+
+  if (error) throw new Error(`Failed to get conversations: ${error.message}`);
+  return (data as Conversation[]) ?? [];
 }
 
-export function updateConversationTitle(id: number, title: string): void {
-  db.prepare(
-    "UPDATE conversations SET title = ?, updated_at = datetime('now') WHERE id = ?"
-  ).run(title, id);
+export async function updateConversationTitle(id: number, title: string): Promise<void> {
+  const { error } = await supabase
+    .from('conversations')
+    .update({ title, updated_at: new Date().toISOString() })
+    .eq('id', id);
+
+  if (error) throw new Error(`Failed to update conversation: ${error.message}`);
 }
 
-export function deleteConversation(id: number, userId: number): void {
-  db.prepare('DELETE FROM conversations WHERE id = ? AND user_id = ?').run(id, userId);
+export async function deleteConversation(id: number, userId: number): Promise<void> {
+  const { error } = await supabase
+    .from('conversations')
+    .delete()
+    .eq('id', id)
+    .eq('user_id', userId);
+
+  if (error) throw new Error(`Failed to delete conversation: ${error.message}`);
 }
 
 // ==================== Message operations ====================
@@ -153,24 +166,33 @@ export interface Message {
   created_at: string;
 }
 
-export function addMessage(conversationId: number, role: string, content: string): Message {
-  const stmt = db.prepare(
-    'INSERT INTO messages (conversation_id, role, content) VALUES (?, ?, ?)'
-  );
-  const result = stmt.run(conversationId, role, content);
+export async function addMessage(conversationId: number, role: string, content: string): Promise<Message> {
+  const { data, error } = await supabase
+    .from('messages')
+    .insert({ conversation_id: conversationId, role, content })
+    .select()
+    .single();
+
+  if (error) throw new Error(`Failed to add message: ${error.message}`);
 
   // Update conversation timestamp
-  db.prepare(
-    "UPDATE conversations SET updated_at = datetime('now') WHERE id = ?"
-  ).run(conversationId);
+  await supabase
+    .from('conversations')
+    .update({ updated_at: new Date().toISOString() })
+    .eq('id', conversationId);
 
-  return db.prepare('SELECT * FROM messages WHERE id = ?').get(result.lastInsertRowid) as Message;
+  return data as Message;
 }
 
-export function getConversationMessages(conversationId: number): Message[] {
-  return db.prepare(
-    'SELECT * FROM messages WHERE conversation_id = ? ORDER BY created_at ASC'
-  ).all(conversationId) as Message[];
+export async function getConversationMessages(conversationId: number): Promise<Message[]> {
+  const { data, error } = await supabase
+    .from('messages')
+    .select('*')
+    .eq('conversation_id', conversationId)
+    .order('created_at', { ascending: true });
+
+  if (error) throw new Error(`Failed to get messages: ${error.message}`);
+  return (data as Message[]) ?? [];
 }
 
-export default db;
+export default supabase;

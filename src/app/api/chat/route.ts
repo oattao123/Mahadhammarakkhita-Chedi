@@ -24,19 +24,19 @@ export async function POST(req: Request) {
   if (user) {
     if (!activeConversationId) {
       // Create new conversation
-      const conv = createConversation(user.id, userText.slice(0, 50) + (userText.length > 50 ? '...' : ''));
+      const conv = await createConversation(user.id, userText.slice(0, 50) + (userText.length > 50 ? '...' : ''));
       activeConversationId = conv.id;
     } else {
       // Verify ownership
-      const conv = getConversation(activeConversationId);
+      const conv = await getConversation(activeConversationId);
       if (!conv || conv.user_id !== user.id) {
         activeConversationId = undefined;
       } else if (conv.title === 'สนทนาใหม่') {
-        updateConversationTitle(activeConversationId, userText.slice(0, 50) + (userText.length > 50 ? '...' : ''));
+        await updateConversationTitle(activeConversationId, userText.slice(0, 50) + (userText.length > 50 ? '...' : ''));
       }
     }
     if (activeConversationId) {
-      addMessage(activeConversationId, 'user', userText);
+      await addMessage(activeConversationId, 'user', userText);
     }
   }
 
@@ -46,7 +46,7 @@ export async function POST(req: Request) {
   // If crisis situation, return immediate response with conversationId
   if (filterResult.isCrisis && filterResult.crisisResponse) {
     if (user && activeConversationId) {
-      addMessage(activeConversationId, 'assistant', filterResult.crisisResponse);
+      await addMessage(activeConversationId, 'assistant', filterResult.crisisResponse);
     }
     const crisisStream = new ReadableStream({
       start(controller) {
@@ -89,7 +89,7 @@ export async function POST(req: Request) {
     async onFinish({ text }) {
       // Save assistant response to DB
       if (user && activeConversationId) {
-        addMessage(activeConversationId, 'assistant', text);
+        await addMessage(activeConversationId, 'assistant', text);
       }
     },
   });
