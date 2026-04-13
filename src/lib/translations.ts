@@ -69,6 +69,11 @@ export const translations = {
 
     // Language
     'lang.switch': 'EN',
+
+    // Google OAuth
+    'auth.continueWithGoogle': 'ดำเนินการต่อด้วย Google',
+    'auth.or': 'หรือ',
+    'auth.oauthError': 'เข้าสู่ระบบด้วย Google ไม่สำเร็จ กรุณาลองใหม่',
   },
 
   en: {
@@ -139,6 +144,11 @@ export const translations = {
 
     // Language
     'lang.switch': 'TH',
+
+    // Google OAuth
+    'auth.continueWithGoogle': 'Continue with Google',
+    'auth.or': 'or',
+    'auth.oauthError': 'Google sign-in failed. Please try again.',
   },
 } as const;
 

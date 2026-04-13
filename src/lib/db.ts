@@ -49,6 +49,9 @@ db.exec(`
   CREATE INDEX IF NOT EXISTS idx_messages_conversation ON messages(conversation_id);
 `);
 
+// Migration: add google_id column for OAuth users
+try { db.exec('ALTER TABLE users ADD COLUMN google_id TEXT'); } catch { /* already exists */ }
+
 // ==================== User operations ====================
 
 export interface User {
@@ -56,6 +59,7 @@ export interface User {
   name: string;
   email: string;
   password_hash: string;
+  google_id: string | null;
   role: string;
   created_at: string;
 }
@@ -74,6 +78,26 @@ export function getUserByEmail(email: string): User | undefined {
 
 export function getUserById(id: number): User | undefined {
   return db.prepare('SELECT * FROM users WHERE id = ?').get(id) as User | undefined;
+}
+
+/** Find or create a user via Google OAuth. Links to existing account by email if found. */
+export function upsertGoogleUser(googleId: string, email: string, name: string): User {
+  // Check by google_id first
+  const byGoogleId = db.prepare('SELECT * FROM users WHERE google_id = ?').get(googleId) as User | undefined;
+  if (byGoogleId) return byGoogleId;
+
+  // Check by email — link existing account
+  const byEmail = getUserByEmail(email);
+  if (byEmail) {
+    db.prepare('UPDATE users SET google_id = ? WHERE id = ?').run(googleId, byEmail.id);
+    return getUserById(byEmail.id)!;
+  }
+
+  // Create new user (no password for OAuth-only accounts)
+  const result = db.prepare(
+    'INSERT INTO users (name, email, password_hash, google_id) VALUES (?, ?, ?, ?)'
+  ).run(name, email, '', googleId);
+  return getUserById(result.lastInsertRowid as number)!;
 }
 
 // ==================== Conversation operations ====================

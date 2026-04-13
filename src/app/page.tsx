@@ -4,21 +4,24 @@ import { useChat } from '@ai-sdk/react';
 import { DefaultChatTransport } from 'ai';
 import { useState, useRef, useEffect, useCallback, FormEvent } from 'react';
 import { useRouter } from 'next/navigation';
+import { useLanguage } from '@/context/LanguageContext';
+import type { TranslationKey } from '@/lib/translations';
 
 // Types
 interface UserInfo { id: number; name: string; email: string; role: string; }
 interface ConversationItem { id: number; title: string; updated_at: string; }
 interface DbMessage { role: string; content: string; }
 
-const QUICK_PROMPTS = [
-  { icon: '📜', text: 'สิกขาบทสำคัญที่พระนวกะควรรู้', label: 'พระวินัยเบื้องต้น' },
-  { icon: '🧘', text: 'ขั้นตอนการเจริญสติปัฏฐาน 4 อย่างละเอียด', label: 'การเจริญสติปัฏฐาน' },
-  { icon: '🎙️', text: 'แนวทางเทศนาอริยสัจ 4 ให้เข้าใจง่ายสำหรับคนรุ่นใหม่', label: 'แนวทางเทศนา' },
-  { icon: '📖', text: 'สาระสำคัญของธัมมจักกัปปวัตตนสูตร', label: 'ปฐมเทศนา' },
+const QUICK_PROMPTS: { icon: string; labelKey: TranslationKey; textKey: TranslationKey }[] = [
+  { icon: '📜', labelKey: 'prompt.vinaya', textKey: 'prompt.vinaya.text' },
+  { icon: '🧘', labelKey: 'prompt.meditation', textKey: 'prompt.meditation.text' },
+  { icon: '🎙️', labelKey: 'prompt.sermon', textKey: 'prompt.sermon.text' },
+  { icon: '📖', labelKey: 'prompt.sutta', textKey: 'prompt.sutta.text' },
 ];
 
 export default function Home() {
   const router = useRouter();
+  const { locale, setLocale, t } = useLanguage();
   const [input, setInput] = useState('');
   const [sidebarOpen, setSidebarOpen] = useState(false);
   const [user, setUser] = useState<UserInfo | null>(null);
@@ -144,7 +147,7 @@ export default function Home() {
       <div className="flex items-center justify-center h-screen" style={{ background: 'var(--background)' }}>
         <div className="text-center animate-fade-in">
           <div className="text-5xl mb-3 animate-float">🪷</div>
-          <p style={{ color: 'var(--foreground-muted)' }} className="text-sm">กำลังโหลด...</p>
+          <p style={{ color: 'var(--foreground-muted)' }} className="text-sm">{t('app.loading')}</p>
         </div>
       </div>
     );
@@ -172,7 +175,7 @@ export default function Home() {
             <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="2">
               <path strokeLinecap="round" strokeLinejoin="round" d="M12 4v16m8-8H4" />
             </svg>
-            สนทนาใหม่
+            {t('sidebar.newChat')}
           </button>
           <button
             onClick={() => setSidebarOpen(false)}
@@ -218,7 +221,7 @@ export default function Home() {
                         type="submit"
                         className="w-7 h-7 rounded flex items-center justify-center flex-shrink-0"
                         style={{ color: 'var(--gold)' }}
-                        title="บันทึก"
+                        title={t('sidebar.save')}
                       >
                         <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="2.5">
                           <path strokeLinecap="round" strokeLinejoin="round" d="M5 13l4 4L19 7" />
@@ -229,7 +232,7 @@ export default function Home() {
                         onClick={() => setEditingConvId(null)}
                         className="w-7 h-7 rounded flex items-center justify-center flex-shrink-0"
                         style={{ color: 'var(--sidebar-text-muted)' }}
-                        title="ยกเลิก"
+                        title={t('sidebar.cancel')}
                       >
                         <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="2">
                           <path strokeLinecap="round" strokeLinejoin="round" d="M6 18L18 6M6 6l12 12" />
@@ -245,7 +248,7 @@ export default function Home() {
                       >
                         <p className="text-sm truncate" style={{ color: 'var(--sidebar-text)' }}>{conv.title}</p>
                         <p className="text-xs mt-0.5" style={{ color: 'var(--sidebar-text-muted)' }}>
-                          {formatDate(conv.updated_at)}
+                          {formatDate(conv.updated_at, t, locale)}
                         </p>
                       </button>
                       {/* Rename button */}
@@ -253,7 +256,7 @@ export default function Home() {
                         onClick={(e) => { e.stopPropagation(); setEditingConvId(conv.id); setEditingTitle(conv.title); }}
                         className="w-7 h-7 rounded flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity flex-shrink-0"
                         style={{ color: 'var(--sidebar-text-muted)' }}
-                        title="แก้ไขชื่อ"
+                        title={t('sidebar.rename')}
                       >
                         <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="2">
                           <path strokeLinecap="round" strokeLinejoin="round" d="M15.232 5.232l3.536 3.536m-2.036-5.036a2.5 2.5 0 113.536 3.536L6.5 21.036H3v-3.572L16.732 3.732z" />
@@ -264,7 +267,7 @@ export default function Home() {
                         onClick={(e) => { e.stopPropagation(); handleDeleteConv(conv.id); }}
                         className="w-7 h-7 rounded flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity mr-1 flex-shrink-0"
                         style={{ color: 'var(--sidebar-text-muted)' }}
-                        title="ลบ"
+                        title={t('sidebar.delete')}
                       >
                         <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="2">
                           <path strokeLinecap="round" strokeLinejoin="round" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
@@ -276,20 +279,20 @@ export default function Home() {
               ))
             ) : (
               <p className="text-center text-xs py-8" style={{ color: 'var(--sidebar-text-muted)' }}>
-                ยังไม่มีประวัติการสนทนา
+                {t('sidebar.noHistory')}
               </p>
             )
           ) : (
             <div className="text-center py-8 px-4">
               <p className="text-sm mb-3" style={{ color: 'var(--sidebar-text-muted)' }}>
-                เข้าสู่ระบบเพื่อบันทึกประวัติ
+                {t('sidebar.loginPrompt')}
               </p>
               <button
                 onClick={() => router.push('/login')}
                 className="px-4 py-2 rounded-lg text-sm font-medium transition-colors"
                 style={{ background: 'var(--gold)', color: '#fff' }}
               >
-                เข้าสู่ระบบ
+                {t('auth.login')}
               </button>
             </div>
           )}
@@ -313,7 +316,7 @@ export default function Home() {
                 onClick={handleLogout}
                 className="w-8 h-8 rounded flex items-center justify-center transition-opacity hover:opacity-100 opacity-60 flex-shrink-0"
                 style={{ color: 'var(--sidebar-text-muted)' }}
-                title="ออกจากระบบ"
+                title={t('auth.logout')}
               >
                 <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="2">
                   <path strokeLinecap="round" strokeLinejoin="round" d="M17 16l4-4m0 0l-4-4m4 4H7m6 4v1a3 3 0 01-3 3H6a3 3 0 01-3-3V7a3 3 0 013-3h4a3 3 0 013 3v1" />
@@ -326,7 +329,7 @@ export default function Home() {
               className="w-full py-2.5 rounded-lg text-sm font-medium transition-colors"
               style={{ background: 'var(--sidebar-hover)', color: 'var(--sidebar-text)' }}
             >
-              เข้าสู่ระบบ / สมัครสมาชิก
+              {t('auth.loginOrRegister')}
             </button>
           )}
         </div>
@@ -361,7 +364,7 @@ export default function Home() {
 
           <div className="flex items-center gap-2 flex-1">
             <span className="text-lg">🪷</span>
-            <h1 className="text-base font-semibold" style={{ color: 'var(--foreground)' }}>ธรรมสหาย</h1>
+            <h1 className="text-base font-semibold" style={{ color: 'var(--foreground)' }}>{t('app.name')}</h1>
             {isLoading && (
               <div className="flex items-center gap-1 ml-2">
                 <div className="w-1.5 h-1.5 rounded-full typing-dot" style={{ background: 'var(--gold)' }} />
@@ -371,13 +374,23 @@ export default function Home() {
             )}
           </div>
 
+          {/* Language switcher */}
+          <button
+            onClick={() => setLocale(locale === 'th' ? 'en' : 'th')}
+            className="px-3 py-1.5 rounded-lg text-xs font-semibold transition-colors border"
+            style={{ color: 'var(--gold)', borderColor: 'var(--gold)', background: 'transparent' }}
+            title={locale === 'th' ? 'Switch to English' : 'เปลี่ยนเป็นภาษาไทย'}
+          >
+            {t('lang.switch')}
+          </button>
+
           {!user && (
             <button
               onClick={() => router.push('/login')}
               className="px-4 py-1.5 rounded-lg text-sm font-medium transition-colors"
               style={{ background: 'var(--foreground)', color: 'var(--background)' }}
             >
-              เข้าสู่ระบบ
+              {t('auth.login')}
             </button>
           )}
         </div>
@@ -427,7 +440,7 @@ export default function Home() {
                   value={input}
                   onChange={e => setInput(e.target.value)}
                   onKeyDown={handleKeyDown}
-                  placeholder="ถามคำถามธรรมะ หรือค้นคว้าพระไตรปิฎก..."
+                  placeholder={t('chat.placeholder')}
                   rows={1}
                   className="flex-1 bg-transparent px-5 py-4 text-base resize-none focus:outline-none"
                   style={{
@@ -459,7 +472,7 @@ export default function Home() {
               </div>
             </form>
             <p className="text-center text-xs mt-2.5" style={{ color: 'var(--foreground-muted)', opacity: 0.5 }}>
-              ธรรมสหายเป็นเครื่องมือ AI อ้างอิงพระไตรปิฎก กรุณาตรวจสอบกับคัมภีร์ต้นฉบับ
+              {t('app.disclaimer')}
             </p>
           </div>
         </div>
@@ -492,6 +505,7 @@ function Avatar({ role }: { role: string }) {
 }
 
 function MessageRow({ message }: { message: { id: string; role: string; parts?: Array<{ type: string; text?: string }> } }) {
+  const { t } = useLanguage();
   const text = message.parts?.filter(p => p.type === 'text').map(p => p.text).join('') || '';
   const isUser = message.role === 'user';
 
@@ -500,7 +514,7 @@ function MessageRow({ message }: { message: { id: string; role: string; parts?: 
       <Avatar role={message.role} />
       <div className="flex-1 min-w-0 pt-0.5">
         <p className="text-xs font-medium mb-1.5" style={{ color: 'var(--foreground-muted)' }}>
-          {isUser ? 'คุณ' : 'ธรรมสหาย'}
+          {isUser ? t('chat.you') : t('chat.assistant')}
         </p>
         <div className="msg-content">
           {isUser ? <p>{text}</p> : <RenderMarkdown text={text} />}
@@ -541,22 +555,23 @@ function inlineFmt(text: string): React.ReactNode {
   });
 }
 
-function WelcomeScreen({ onSuggestion, userName }: { onSuggestion: (t: string) => void; userName?: string }) {
+function WelcomeScreen({ onSuggestion, userName }: { onSuggestion: (text: string) => void; userName?: string }) {
+  const { t } = useLanguage();
   return (
     <div className="flex flex-col items-center justify-center min-h-[70vh] animate-fade-in px-4">
       <div className="text-5xl mb-5 animate-float">🪷</div>
       <h2 className="text-2xl font-semibold mb-2" style={{ color: 'var(--foreground)' }}>
-        {userName ? `นมัสการ ${userName}` : 'ธรรมสหาย'}
+        {userName ? `${t('welcome.greeting')} ${userName}` : t('welcome.defaultGreeting')}
       </h2>
       <p className="text-base mb-10" style={{ color: 'var(--foreground-muted)' }}>
-        ค้นคว้าพระไตรปิฎก พระวินัย พระสูตร พระอภิธรรม
+        {t('welcome.subtitle')}
       </p>
 
       <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 w-full max-w-2xl">
         {QUICK_PROMPTS.map(p => (
           <button
-            key={p.label}
-            onClick={() => onSuggestion(p.text)}
+            key={p.labelKey}
+            onClick={() => onSuggestion(t(p.textKey))}
             className="flex items-start gap-3 p-4 rounded-xl text-left transition-all hover:shadow-md active:scale-[0.98]"
             style={{
               border: '1px solid var(--border)',
@@ -567,8 +582,8 @@ function WelcomeScreen({ onSuggestion, userName }: { onSuggestion: (t: string) =
           >
             <span className="text-xl mt-0.5">{p.icon}</span>
             <div>
-              <p className="text-sm font-medium" style={{ color: 'var(--foreground)' }}>{p.label}</p>
-              <p className="text-xs mt-0.5" style={{ color: 'var(--foreground-muted)' }}>{p.text}</p>
+              <p className="text-sm font-medium" style={{ color: 'var(--foreground)' }}>{t(p.labelKey)}</p>
+              <p className="text-xs mt-0.5" style={{ color: 'var(--foreground-muted)' }}>{t(p.textKey)}</p>
             </div>
           </button>
         ))}
@@ -577,16 +592,16 @@ function WelcomeScreen({ onSuggestion, userName }: { onSuggestion: (t: string) =
   );
 }
 
-function formatDate(dateStr: string): string {
+function formatDate(dateStr: string, t: (key: TranslationKey) => string, locale: string): string {
   const date = new Date(dateStr + 'Z');
   const now = new Date();
   const diff = now.getTime() - date.getTime();
   const mins = Math.floor(diff / 60000);
   const hrs = Math.floor(diff / 3600000);
   const days = Math.floor(diff / 86400000);
-  if (mins < 1) return 'เมื่อสักครู่';
-  if (mins < 60) return `${mins} นาทีที่แล้ว`;
-  if (hrs < 24) return `${hrs} ชม.ที่แล้ว`;
-  if (days < 7) return `${days} วันที่แล้ว`;
-  return date.toLocaleDateString('th-TH', { day: 'numeric', month: 'short' });
+  if (mins < 1) return t('date.justNow');
+  if (mins < 60) return `${mins} ${t('date.minutesAgo')}`;
+  if (hrs < 24) return `${hrs} ${t('date.hoursAgo')}`;
+  if (days < 7) return `${days} ${t('date.daysAgo')}`;
+  return date.toLocaleDateString(locale === 'th' ? 'th-TH' : 'en-GB', { day: 'numeric', month: 'short' });
 }
