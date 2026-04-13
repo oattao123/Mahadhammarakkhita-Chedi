@@ -85,7 +85,10 @@ export async function POST(req: Request) {
   const result = streamText({
     model: openrouter('anthropic/claude-sonnet-4.5'),
     system: systemPrompt,
-    messages: await convertToModelMessages(messages),
+    messages: messages.map((m) => ({
+      role: m.role as 'user' | 'assistant' | 'system',
+      content: m.content || (m.parts ? m.parts.map((p: any) => p.text).join('') : '') || '',
+    })),
     async onFinish({ text }) {
       // Save assistant response to DB
       if (user && activeConversationId) {
