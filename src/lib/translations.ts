@@ -1,0 +1,145 @@
+export type Locale = 'th' | 'en';
+
+export const translations = {
+  th: {
+    // App
+    'app.name': 'ธรรมสหาย',
+    'app.subtitle': 'ผู้ช่วยค้นคว้าพระไตรปิฎกและหลักธรรมเถรวาท',
+    'app.loading': 'กำลังโหลด...',
+    'app.disclaimer': 'ธรรมสหายเป็นเครื่องมือ AI อ้างอิงพระไตรปิฎก กรุณาตรวจสอบกับคัมภีร์ต้นฉบับ',
+
+    // Sidebar
+    'sidebar.newChat': 'สนทนาใหม่',
+    'sidebar.noHistory': 'ยังไม่มีประวัติการสนทนา',
+    'sidebar.loginPrompt': 'เข้าสู่ระบบเพื่อบันทึกประวัติ',
+    'sidebar.rename': 'แก้ไขชื่อ',
+    'sidebar.delete': 'ลบ',
+    'sidebar.save': 'บันทึก',
+    'sidebar.cancel': 'ยกเลิก',
+
+    // Chat
+    'chat.placeholder': 'ถามคำถามธรรมะ หรือค้นคว้าพระไตรปิฎก...',
+    'chat.you': 'คุณ',
+    'chat.assistant': 'ธรรมสหาย',
+    'chat.searching': 'กำลังค้นคว้า...',
+    'chat.historySaved': 'ประวัติสนทนาจะถูกบันทึกอัตโนมัติ',
+    'chat.loginToSave': 'เข้าสู่ระบบเพื่อบันทึกประวัติการสนทนา',
+
+    // Welcome
+    'welcome.greeting': 'นมัสการ',
+    'welcome.defaultGreeting': 'ธรรมสหาย',
+    'welcome.subtitle': 'ค้นคว้าพระไตรปิฎก พระวินัย พระสูตร พระอภิธรรม',
+
+    // Quick prompts
+    'prompt.vinaya': 'พระวินัยเบื้องต้น',
+    'prompt.vinaya.text': 'สิกขาบทสำคัญที่พระนวกะควรรู้',
+    'prompt.meditation': 'การเจริญสติปัฏฐาน',
+    'prompt.meditation.text': 'ขั้นตอนการเจริญสติปัฏฐาน 4 อย่างละเอียด',
+    'prompt.sermon': 'แนวทางเทศนา',
+    'prompt.sermon.text': 'แนวทางเทศนาอริยสัจ 4 ให้เข้าใจง่ายสำหรับคนรุ่นใหม่',
+    'prompt.sutta': 'ปฐมเทศนา',
+    'prompt.sutta.text': 'สาระสำคัญของธัมมจักกัปปวัตตนสูตร',
+
+    // Auth
+    'auth.login': 'เข้าสู่ระบบ',
+    'auth.register': 'สร้างบัญชีใหม่',
+    'auth.logout': 'ออกจากระบบ',
+    'auth.name': 'ชื่อ / ฉายา',
+    'auth.namePlaceholder': 'เช่น พระมหาสมชาย',
+    'auth.email': 'อีเมล',
+    'auth.emailPlaceholder': 'example@email.com',
+    'auth.password': 'รหัสผ่าน',
+    'auth.passwordPlaceholder': 'รหัสผ่าน',
+    'auth.passwordMinLength': 'อย่างน้อย 6 ตัวอักษร',
+    'auth.loginButton': 'เข้าสู่ระบบ',
+    'auth.registerButton': 'สร้างบัญชี',
+    'auth.processing': 'กำลังดำเนินการ...',
+    'auth.hasAccount': 'มีบัญชีอยู่แล้ว? เข้าสู่ระบบ',
+    'auth.noAccount': 'ยังไม่มีบัญชี? สร้างบัญชีใหม่',
+    'auth.secureNote': 'ข้อมูลของท่านจะถูกเก็บรักษาอย่างปลอดภัย',
+    'auth.connectionError': 'ไม่สามารถเชื่อมต่อเซิร์ฟเวอร์ได้',
+    'auth.loginOrRegister': 'เข้าสู่ระบบ / สมัครสมาชิก',
+    'auth.error': 'เกิดข้อผิดพลาด',
+
+    // Date formatting
+    'date.justNow': 'เมื่อสักครู่',
+    'date.minutesAgo': 'นาทีที่แล้ว',
+    'date.hoursAgo': 'ชม.ที่แล้ว',
+    'date.daysAgo': 'วันที่แล้ว',
+
+    // Language
+    'lang.switch': 'EN',
+  },
+
+  en: {
+    // App
+    'app.name': 'Dhamma Sahāya',
+    'app.subtitle': 'Tipitaka Research Assistant for Theravāda Buddhism',
+    'app.loading': 'Loading...',
+    'app.disclaimer': 'Dhamma Sahāya is an AI tool referencing the Tipitaka. Please verify with original scriptures.',
+
+    // Sidebar
+    'sidebar.newChat': 'New Chat',
+    'sidebar.noHistory': 'No conversation history',
+    'sidebar.loginPrompt': 'Log in to save history',
+    'sidebar.rename': 'Rename',
+    'sidebar.delete': 'Delete',
+    'sidebar.save': 'Save',
+    'sidebar.cancel': 'Cancel',
+
+    // Chat
+    'chat.placeholder': 'Ask about Dhamma or search the Tipitaka...',
+    'chat.you': 'You',
+    'chat.assistant': 'Dhamma Sahāya',
+    'chat.searching': 'Searching...',
+    'chat.historySaved': 'Chat history is saved automatically',
+    'chat.loginToSave': 'Log in to save chat history',
+
+    // Welcome
+    'welcome.greeting': 'Welcome',
+    'welcome.defaultGreeting': 'Dhamma Sahāya',
+    'welcome.subtitle': 'Search the Tipitaka — Vinaya, Sutta, Abhidhamma',
+
+    // Quick prompts
+    'prompt.vinaya': 'Vinaya Basics',
+    'prompt.vinaya.text': 'Important precepts every new monk should know',
+    'prompt.meditation': 'Satipaṭṭhāna Practice',
+    'prompt.meditation.text': 'Step-by-step guide to the Four Foundations of Mindfulness',
+    'prompt.sermon': 'Sermon Guidance',
+    'prompt.sermon.text': 'How to explain the Four Noble Truths to modern audiences',
+    'prompt.sutta': 'First Sermon',
+    'prompt.sutta.text': 'Key teachings of the Dhammacakkappavattana Sutta',
+
+    // Auth
+    'auth.login': 'Log In',
+    'auth.register': 'Create Account',
+    'auth.logout': 'Log Out',
+    'auth.name': 'Name / Monastic Title',
+    'auth.namePlaceholder': 'e.g. Phra Maha Somchai',
+    'auth.email': 'Email',
+    'auth.emailPlaceholder': 'example@email.com',
+    'auth.password': 'Password',
+    'auth.passwordPlaceholder': 'Password',
+    'auth.passwordMinLength': 'At least 6 characters',
+    'auth.loginButton': 'Log In',
+    'auth.registerButton': 'Create Account',
+    'auth.processing': 'Processing...',
+    'auth.hasAccount': 'Already have an account? Log in',
+    'auth.noAccount': "Don't have an account? Create one",
+    'auth.secureNote': 'Your data is kept safe and secure.',
+    'auth.connectionError': 'Cannot connect to server',
+    'auth.loginOrRegister': 'Log In / Register',
+    'auth.error': 'An error occurred',
+
+    // Date formatting
+    'date.justNow': 'Just now',
+    'date.minutesAgo': 'min ago',
+    'date.hoursAgo': 'hr ago',
+    'date.daysAgo': 'days ago',
+
+    // Language
+    'lang.switch': 'TH',
+  },
+} as const;
+
+export type TranslationKey = keyof typeof translations.th;
