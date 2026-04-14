@@ -40,12 +40,26 @@ export async function GET(req: NextRequest) {
     return response;
   };
 
-  const failRedirect = () =>
-    clearStateCookie(NextResponse.redirect(`${appUrl}/login?error=oauth`));
+  const failRedirect = (reason: string) =>
+    clearStateCookie(NextResponse.redirect(`${appUrl}/login?error=${encodeURIComponent(reason)}`));
 
   // Validate state (CSRF protection)
-  if (oauthError || !code || !state || !savedState || state !== savedState) {
-    return failRedirect();
+  if (oauthError) {
+    return failRedirect(`google_${oauthError}`);
+  }
+  if (!code || !state) {
+    return failRedirect('missing_params');
+  }
+  if (!savedState) {
+    return failRedirect('no_state_cookie');
+  }
+  if (state !== savedState) {
+    return failRedirect('state_mismatch');
+  }
+
+  // Check client secret is configured
+  if (!process.env.GOOGLE_CLIENT_SECRET || process.env.GOOGLE_CLIENT_SECRET === 'your-google-client-secret') {
+    return failRedirect('no_client_secret');
   }
 
   try {
@@ -56,7 +70,7 @@ export async function GET(req: NextRequest) {
       body: new URLSearchParams({
         code,
         client_id: process.env.GOOGLE_CLIENT_ID!,
-        client_secret: process.env.GOOGLE_CLIENT_SECRET!,
+        client_secret: process.env.GOOGLE_CLIENT_SECRET,
         redirect_uri: `${appUrl}/api/auth/google/callback`,
         grant_type: 'authorization_code',
       }),
@@ -64,7 +78,7 @@ export async function GET(req: NextRequest) {
 
     const tokens = await tokenRes.json() as GoogleTokenResponse;
     if (!tokenRes.ok || tokens.error) {
-      throw new Error(tokens.error ?? 'Token exchange failed');
+      return failRedirect(`token_${tokens.error ?? 'exchange_failed'}`);
     }
 
     // Fetch user info from Google
@@ -74,7 +88,7 @@ export async function GET(req: NextRequest) {
 
     const googleUser = await userRes.json() as GoogleUserInfo;
     if (!userRes.ok || !googleUser.id) {
-      throw new Error('Failed to fetch Google user info');
+      return failRedirect('userinfo_failed');
     }
 
     // Find or create user in DB, then create session
@@ -87,7 +101,8 @@ export async function GET(req: NextRequest) {
     });
 
     return clearStateCookie(NextResponse.redirect(`${appUrl}/`));
-  } catch {
-    return failRedirect();
+  } catch (err: unknown) {
+    const msg = err instanceof Error ? err.message : 'unknown';
+    return failRedirect(`exception_${msg}`);
   }
 }

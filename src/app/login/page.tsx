@@ -32,8 +32,19 @@ function LoginForm() {
 
   // Show error if Google OAuth failed
   useEffect(() => {
-    if (searchParams.get('error') === 'oauth') {
-      setError(t('auth.oauthError'));
+    const errParam = searchParams.get('error');
+    if (errParam) {
+      if (errParam === 'no_client_secret') {
+        setError(t('auth.oauthNoSecret'));
+      } else if (errParam === 'no_state_cookie' || errParam === 'state_mismatch') {
+        setError(t('auth.oauthStateFailed'));
+      } else if (errParam.startsWith('token_')) {
+        setError(t('auth.oauthTokenFailed'));
+      } else if (errParam.startsWith('google_')) {
+        setError(`${t('auth.oauthError')} (${errParam.replace('google_', '')})`);
+      } else {
+        setError(t('auth.oauthError'));
+      }
     }
   }, [searchParams, t]);
 

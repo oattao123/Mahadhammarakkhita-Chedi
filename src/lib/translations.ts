@@ -74,6 +74,9 @@ export const translations = {
     'auth.continueWithGoogle': 'ดำเนินการต่อด้วย Google',
     'auth.or': 'หรือ',
     'auth.oauthError': 'เข้าสู่ระบบด้วย Google ไม่สำเร็จ กรุณาลองใหม่',
+    'auth.oauthNoSecret': 'ระบบยังไม่ได้ตั้งค่า Google Client Secret — กรุณาตั้งค่า GOOGLE_CLIENT_SECRET ใน Environment Variables',
+    'auth.oauthStateFailed': 'Cookie หมดอายุหรือไม่ถูกต้อง กรุณาลองใหม่อีกครั้ง',
+    'auth.oauthTokenFailed': 'ไม่สามารถยืนยันตัวตนกับ Google ได้ — ตรวจสอบ Client ID/Secret',
 
     // Documents
     'doc.upload': 'อัปโหลดเอกสาร',
@@ -87,10 +90,12 @@ export const translations = {
     'doc.supportedFormats': 'รองรับ PDF, TXT, MD',
     'doc.loginToUpload': 'เข้าสู่ระบบเพื่ออัปโหลดเอกสาร',
 
-    // Pali Reader
-    'pali.speak': 'อ่านออกเสียงบาลี',
-    'pali.stop': 'หยุดอ่าน',
+    // Pali Reader / TTS
+    'pali.speak': 'อ่านออกเสียง',
+    'pali.stop': 'หยุด',
     'pali.speaking': 'กำลังอ่าน...',
+    'pali.loading': 'กำลังเตรียม...',
+    'pali.speed': 'ความเร็ว',
   },
 
   en: {
@@ -166,6 +171,9 @@ export const translations = {
     'auth.continueWithGoogle': 'Continue with Google',
     'auth.or': 'or',
     'auth.oauthError': 'Google sign-in failed. Please try again.',
+    'auth.oauthNoSecret': 'GOOGLE_CLIENT_SECRET is not configured — please set it in Environment Variables',
+    'auth.oauthStateFailed': 'Session cookie expired or invalid. Please try again.',
+    'auth.oauthTokenFailed': 'Could not authenticate with Google — check Client ID/Secret',
 
     // Documents
     'doc.upload': 'Upload Document',
@@ -179,10 +187,12 @@ export const translations = {
     'doc.supportedFormats': 'Supports PDF, TXT, MD',
     'doc.loginToUpload': 'Log in to upload documents',
 
-    // Pali Reader
-    'pali.speak': 'Read Pali aloud',
-    'pali.stop': 'Stop reading',
+    // Pali Reader / TTS
+    'pali.speak': 'Read aloud',
+    'pali.stop': 'Stop',
     'pali.speaking': 'Reading...',
+    'pali.loading': 'Preparing...',
+    'pali.speed': 'Speed',
   },
 } as const;
 

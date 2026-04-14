@@ -5,6 +5,7 @@ import { DefaultChatTransport } from 'ai';
 import { useState, useRef, useEffect, useCallback, FormEvent } from 'react';
 import { useRouter } from 'next/navigation';
 import { useLanguage } from '@/context/LanguageContext';
+import { useSpeech } from '@/hooks/useSpeech';
 import type { TranslationKey } from '@/lib/translations';
 
 // Types
@@ -702,47 +703,47 @@ function Avatar({ role }: { role: string }) {
 }
 
 function MessageRow({ message }: { message: { id: string; role: string; parts?: Array<{ type: string; text?: string }> } }) {
-  const { t } = useLanguage();
-  const [speaking, setSpeaking] = useState(false);
+  const { locale, t } = useLanguage();
   const text = message.parts?.filter(p => p.type === 'text').map(p => p.text).join('') || '';
   const isUser = message.role === 'user';
   const hasThai = /[\u0E00-\u0E7F]/.test(text);
+  const speechLang = hasThai ? 'th-TH' : 'en-US';
+  const { speak, stop, speaking, supported, rate, setRate } = useSpeech({ lang: speechLang, rate: 0.9 });
+  const [showSpeed, setShowSpeed] = useState(false);
+  const [paliReading, setPaliReading] = useState<string | null>(null);
+  const [loadingPali, setLoadingPali] = useState(false);
 
   const handleSpeak = async () => {
     if (speaking) {
-      window.speechSynthesis.cancel();
-      setSpeaking(false);
+      stop();
       return;
     }
 
-    try {
-      // Get Thai phonetic reading from API
-      const res = await fetch('/api/pali-read', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ text }),
-      });
-      const data = await res.json();
-      const readingText = data.thaiReading || text;
-
-      const utterance = new SpeechSynthesisUtterance(readingText);
-      utterance.lang = 'th-TH';
-      utterance.rate = 0.8;
-
-      // Try to find a Thai voice
-      const voices = window.speechSynthesis.getVoices();
-      const thaiVoice = voices.find(v => v.lang.startsWith('th'));
-      if (thaiVoice) utterance.voice = thaiVoice;
-
-      utterance.onend = () => setSpeaking(false);
-      utterance.onerror = () => setSpeaking(false);
-
-      setSpeaking(true);
-      window.speechSynthesis.speak(utterance);
-    } catch {
-      setSpeaking(false);
+    // For Thai text, get Pali phonetic reading first
+    if (hasThai && !paliReading) {
+      setLoadingPali(true);
+      try {
+        const res = await fetch('/api/pali-read', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ text }),
+        });
+        const data = await res.json();
+        const reading = data.thaiReading || text;
+        setPaliReading(reading);
+        speak(reading);
+      } catch {
+        // Fallback to raw text
+        speak(text);
+      } finally {
+        setLoadingPali(false);
+      }
+    } else {
+      speak(paliReading || text);
     }
   };
+
+  const speedOptions = [0.6, 0.8, 0.9, 1.0, 1.2];
 
   return (
     <div className={`flex gap-4 animate-fade-in ${isUser ? 'msg-user' : ''}`}>
@@ -752,33 +753,88 @@ function MessageRow({ message }: { message: { id: string; role: string; parts?: 
           <p className="text-xs font-medium" style={{ color: 'var(--foreground-muted)' }}>
             {isUser ? t('chat.you') : t('chat.assistant')}
           </p>
-          {hasThai && (
-            <button
-              onClick={handleSpeak}
-              className="flex items-center gap-1 px-2 py-0.5 rounded-full text-xs transition-colors"
-              style={{
-                color: speaking ? '#fff' : 'var(--gold)',
-                background: speaking ? 'var(--gold)' : 'var(--gold-subtle)',
-              }}
-              title={speaking ? t('pali.stop') : t('pali.speak')}
-            >
-              {speaking ? (
-                <>
-                  <svg className="w-3 h-3" fill="currentColor" viewBox="0 0 24 24"><rect x="6" y="4" width="4" height="16" rx="1"/><rect x="14" y="4" width="4" height="16" rx="1"/></svg>
-                  <span>{t('pali.speaking')}</span>
-                </>
-              ) : (
-                <>
-                  <svg className="w-3 h-3" fill="currentColor" viewBox="0 0 24 24"><path d="M3 9v6h4l5 5V4L7 9H3zm13.5 3A4.5 4.5 0 0014 8.5v7a4.49 4.49 0 002.5-3.5zM14 3.23v2.06a6.51 6.51 0 010 13.42v2.06A8.52 8.52 0 0022.5 12 8.52 8.52 0 0014 3.23z"/></svg>
-                  <span>{t('pali.speak')}</span>
-                </>
-              )}
-            </button>
-          )}
         </div>
         <div className="msg-content">
           {isUser ? <p>{text}</p> : <RenderMarkdown text={text} />}
         </div>
+
+        {/* TTS controls — show for all messages with text */}
+        {supported && text.trim().length > 0 && (
+          <div className="flex items-center gap-1.5 mt-2 flex-wrap">
+            {/* Play / Stop button */}
+            <button
+              onClick={handleSpeak}
+              disabled={loadingPali}
+              className="flex items-center gap-1.5 px-3 py-1.5 rounded-full text-xs font-medium transition-all"
+              style={{
+                color: speaking ? '#fff' : 'var(--gold)',
+                background: speaking ? 'var(--gold)' : 'var(--gold-subtle)',
+                border: `1px solid ${speaking ? 'var(--gold)' : 'transparent'}`,
+              }}
+              title={speaking ? t('pali.stop') : t('pali.speak')}
+            >
+              {loadingPali ? (
+                <>
+                  <svg className="w-3.5 h-3.5 animate-spin" viewBox="0 0 24 24" fill="none">
+                    <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="3" />
+                    <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z" />
+                  </svg>
+                  <span>{t('pali.loading')}</span>
+                </>
+              ) : speaking ? (
+                <>
+                  <svg className="w-3.5 h-3.5" fill="currentColor" viewBox="0 0 24 24">
+                    <rect x="6" y="4" width="4" height="16" rx="1"/>
+                    <rect x="14" y="4" width="4" height="16" rx="1"/>
+                  </svg>
+                  <span>{t('pali.stop')}</span>
+                </>
+              ) : (
+                <>
+                  <svg className="w-3.5 h-3.5" fill="currentColor" viewBox="0 0 24 24">
+                    <path d="M3 9v6h4l5 5V4L7 9H3zm13.5 3A4.5 4.5 0 0014 8.5v7a4.49 4.49 0 002.5-3.5zM14 3.23v2.06a6.51 6.51 0 010 13.42v2.06A8.52 8.52 0 0022.5 12 8.52 8.52 0 0014 3.23z"/>
+                  </svg>
+                  <span>{t('pali.speak')}</span>
+                </>
+              )}
+            </button>
+
+            {/* Speed control toggle */}
+            <div className="relative">
+              <button
+                onClick={() => setShowSpeed(!showSpeed)}
+                className="flex items-center gap-1 px-2 py-1.5 rounded-full text-xs transition-colors"
+                style={{ color: 'var(--foreground-muted)', background: showSpeed ? 'var(--background-alt)' : 'transparent' }}
+                title={t('pali.speed')}
+              >
+                <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="2">
+                  <path strokeLinecap="round" strokeLinejoin="round" d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" />
+                </svg>
+                <span>{rate}x</span>
+              </button>
+              {showSpeed && (
+                <div
+                  className="absolute bottom-full left-0 mb-1 flex gap-1 p-1.5 rounded-xl shadow-lg z-10"
+                  style={{ background: 'var(--background)', border: '1px solid var(--border)' }}
+                >
+                  {speedOptions.map(s => (
+                    <button
+                      key={s}
+                      onClick={() => { setRate(s); setShowSpeed(false); }}
+                      className="px-2.5 py-1 rounded-lg text-xs font-medium transition-colors"
+                      style={{
+                        background: rate === s ? 'var(--gold)' : 'transparent',
+                        color: rate === s ? '#fff' : 'var(--foreground-muted)',
+                      }}
+                    >
+                      {s}x
+                    </button>
+                  ))}
+                </div>
+              )}
+            </div>
+          </div>
+        )}
       </div>
     </div>
   );
