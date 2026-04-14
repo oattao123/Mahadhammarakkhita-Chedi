@@ -195,4 +195,146 @@ export async function getConversationMessages(conversationId: number): Promise<M
   return (data as Message[]) ?? [];
 }
 
+// ==================== Document operations ====================
+
+export interface Document {
+  id: number;
+  user_id: number;
+  filename: string;
+  file_type: string;
+  total_pages: number | null;
+  created_at: string;
+}
+
+export interface DocumentChunk {
+  id: number;
+  document_id: number;
+  chunk_index: number;
+  page_number: number | null;
+  content: string;
+  keywords: string;
+  created_at: string;
+}
+
+export async function createDocument(
+  userId: number,
+  filename: string,
+  fileType: string,
+  totalPages: number | null
+): Promise<Document> {
+  const { data, error } = await supabase
+    .from('documents')
+    .insert({ user_id: userId, filename, file_type: fileType, total_pages: totalPages })
+    .select()
+    .single();
+
+  if (error) throw new Error(`Failed to create document: ${error.message}`);
+  return data as Document;
+}
+
+export async function addDocumentChunk(
+  documentId: number,
+  chunkIndex: number,
+  pageNumber: number | null,
+  content: string,
+  keywords: string
+): Promise<DocumentChunk> {
+  const { data, error } = await supabase
+    .from('document_chunks')
+    .insert({ document_id: documentId, chunk_index: chunkIndex, page_number: pageNumber, content, keywords })
+    .select()
+    .single();
+
+  if (error) throw new Error(`Failed to add chunk: ${error.message}`);
+  return data as DocumentChunk;
+}
+
+export async function getUserDocuments(userId: number): Promise<Document[]> {
+  const { data, error } = await supabase
+    .from('documents')
+    .select('*')
+    .eq('user_id', userId)
+    .order('created_at', { ascending: false });
+
+  if (error) throw new Error(`Failed to get documents: ${error.message}`);
+  return (data as Document[]) ?? [];
+}
+
+export async function searchDocumentChunks(
+  userId: number,
+  query: string,
+  limit: number = 5
+): Promise<(DocumentChunk & { filename: string })[]> {
+  // Full-text search across user's document chunks
+  // Search in content and keywords columns
+  const { data, error } = await supabase
+    .from('document_chunks')
+    .select('*, documents!inner(filename, user_id)')
+    .eq('documents.user_id', userId)
+    .or(`content.ilike.%${query}%,keywords.ilike.%${query}%`)
+    .limit(limit);
+
+  if (error) throw new Error(`Failed to search chunks: ${error.message}`);
+
+  return (data ?? []).map((row: any) => ({
+    id: row.id,
+    document_id: row.document_id,
+    chunk_index: row.chunk_index,
+    page_number: row.page_number,
+    content: row.content,
+    keywords: row.keywords,
+    created_at: row.created_at,
+    filename: row.documents.filename,
+  }));
+}
+
+/** Multi-word search: score chunks by how many query words they match */
+export async function searchDocumentChunksMulti(
+  userId: number,
+  query: string,
+  topK: number = 5
+): Promise<(DocumentChunk & { filename: string; score: number })[]> {
+  const words = query.toLowerCase().split(/[\s,]+/).filter(w => w.length > 1);
+  if (words.length === 0) return [];
+
+  // Fetch all chunks for this user (limited to 500 for perf)
+  const { data, error } = await supabase
+    .from('document_chunks')
+    .select('*, documents!inner(filename, user_id)')
+    .eq('documents.user_id', userId)
+    .limit(500);
+
+  if (error) throw new Error(`Failed to search chunks: ${error.message}`);
+  if (!data || data.length === 0) return [];
+
+  // Score each chunk
+  const scored = data.map((row: any) => {
+    const contentLower = row.content.toLowerCase();
+    const keywordsLower = (row.keywords || '').toLowerCase();
+    let score = 0;
+    for (const word of words) {
+      if (keywordsLower.includes(word)) score += 10;
+      if (contentLower.includes(word)) score += 3;
+    }
+    return { ...row, filename: row.documents.filename, score };
+  });
+
+  return scored
+    .filter((r: any) => r.score > 0)
+    .sort((a: any, b: any) => b.score - a.score)
+    .slice(0, topK)
+    .map(({ documents, ...rest }: any) => rest);
+}
+
+export async function deleteDocument(id: number, userId: number): Promise<void> {
+  // Chunks are cascade-deleted via FK
+  const { error } = await supabase
+    .from('documents')
+    .delete()
+    .eq('id', id)
+    .eq('user_id', userId);
+
+  if (error) throw new Error(`Failed to delete document: ${error.message}`);
+}
+
 export default supabase;

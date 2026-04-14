@@ -1,6 +1,6 @@
 import { streamText, convertToModelMessages, UIMessage } from 'ai';
 import { openrouter } from '@openrouter/ai-sdk-provider';
-import { retrieveContext } from '@/lib/rag';
+import { retrieveContext, retrieveContextWithDocuments } from '@/lib/rag';
 import { preFilter, buildSystemPrompt } from '@/lib/ethical-filter';
 import { getSession } from '@/lib/auth';
 import { addMessage, getConversation, createConversation, updateConversationTitle } from '@/lib/db';
@@ -10,7 +10,7 @@ export const maxDuration = 60;
 export async function POST(req: Request) {
   const user = await getSession();
 
-  const { messages, conversationId }: { messages: UIMessage[]; conversationId?: number } = await req.json();
+  const { messages, conversationId, locale }: { messages: UIMessage[]; conversationId?: number; locale?: string } = await req.json();
   const lastMessage = messages[messages.length - 1];
 
   // Extract user text from the last message
@@ -67,28 +67,48 @@ export async function POST(req: Request) {
     });
   }
 
-  // RAG: Retrieve relevant Tipitaka context
-  const ragResult = retrieveContext(userText);
+  // RAG: Retrieve relevant context (Tipitaka + user documents if logged in)
+  const ragResult = user
+    ? await retrieveContextWithDocuments(userText, user.id)
+    : retrieveContext(userText);
 
   // Build system prompt with RAG context and ethical guidelines
   let systemPrompt = buildSystemPrompt(ragResult.context);
 
+  // Language instruction — always respond in the user's selected language
+  if (locale === 'en') {
+    systemPrompt += '\n\nIMPORTANT: The user interface is set to English. You MUST respond entirely in English, including all Dhamma explanations, Pali term translations, and source citations. Do not switch to Thai.';
+  } else {
+    systemPrompt += '\n\nสำคัญ: ผู้ใช้เลือกภาษาไทย กรุณาตอบเป็นภาษาไทยทั้งหมด รวมถึงคำอธิบายธรรมะ การแปลศัพท์บาลี และการอ้างอิงแหล่งที่มา';
+  }
+
   if (filterResult.needsDisclaimer && filterResult.disclaimer) {
-    systemPrompt += `\n\n⚠️ หมายเหตุพิเศษ: ${filterResult.disclaimer}\nกรุณาชี้แจงข้อนี้ในคำตอบด้วย`;
+    systemPrompt += locale === 'en'
+      ? `\n\n⚠️ Special note: ${filterResult.disclaimer}\nPlease clarify this in your response.`
+      : `\n\n⚠️ หมายเหตุพิเศษ: ${filterResult.disclaimer}\nกรุณาชี้แจงข้อนี้ในคำตอบด้วย`;
   }
 
   if (ragResult.sources.length > 0) {
-    systemPrompt += `\n\nแหล่งอ้างอิงที่พบ: ${ragResult.sources.map(s => `${s.title} (${s.source})`).join(', ')}
-กรุณาอ้างอิงแหล่งที่มาเหล่านี้ในคำตอบ`;
+    systemPrompt += locale === 'en'
+      ? `\n\nSources found: ${ragResult.sources.map(s => `${s.title} (${s.source})`).join(', ')}\nPlease reference these sources in your answer.`
+      : `\n\nแหล่งอ้างอิงที่พบ: ${ragResult.sources.map(s => `${s.title} (${s.source})`).join(', ')}\nกรุณาอ้างอิงแหล่งที่มาเหล่านี้ในคำตอบ`;
+  }
+
+  // Add uploaded document source citations
+  if (ragResult.documentSources.length > 0) {
+    const docRefs = ragResult.documentSources.map(d => {
+      const page = d.pageNumber ? (locale === 'en' ? `page ${d.pageNumber}` : `หน้า ${d.pageNumber}`) : '';
+      return `"${d.filename}"${page ? ` (${page})` : ''}`;
+    });
+    systemPrompt += locale === 'en'
+      ? `\n\nThe following user-uploaded documents are relevant:\n${docRefs.join('\n')}\nWhen citing information from these documents, always mention the filename and page number (if available) in your answer, e.g. "According to [filename], page X..."`
+      : `\n\nเอกสารที่ผู้ใช้อัปโหลดที่เกี่ยวข้อง:\n${docRefs.join('\n')}\nเมื่ออ้างอิงข้อมูลจากเอกสารเหล่านี้ ให้ระบุชื่อไฟล์และหมายเลขหน้า (ถ้ามี) ในคำตอบเสมอ เช่น "จากไฟล์ [ชื่อไฟล์] หน้า X..."`;
   }
 
   const result = streamText({
     model: openrouter('anthropic/claude-sonnet-4.5'),
     system: systemPrompt,
-    messages: messages.map((m) => ({
-      role: m.role as 'user' | 'assistant' | 'system',
-      content: m.content || (m.parts ? m.parts.map((p: any) => p.text).join('') : '') || '',
-    })),
+    messages: await convertToModelMessages(messages),
     async onFinish({ text }) {
       // Save assistant response to DB
       if (user && activeConversationId) {

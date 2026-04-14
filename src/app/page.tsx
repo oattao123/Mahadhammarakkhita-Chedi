@@ -11,6 +11,7 @@ import type { TranslationKey } from '@/lib/translations';
 interface UserInfo { id: number; name: string; email: string; role: string; }
 interface ConversationItem { id: number; title: string; updated_at: string; }
 interface DbMessage { role: string; content: string; }
+interface DocumentItem { id: number; filename: string; file_type: string; total_pages: number | null; created_at: string; }
 
 const QUICK_PROMPTS: { icon: string; labelKey: TranslationKey; textKey: TranslationKey }[] = [
   { icon: '📜', labelKey: 'prompt.vinaya', textKey: 'prompt.vinaya.text' },
@@ -30,20 +31,37 @@ export default function Home() {
   const [activeConvId, setActiveConvId] = useState<number | null>(null);
   const [editingConvId, setEditingConvId] = useState<number | null>(null);
   const [editingTitle, setEditingTitle] = useState('');
+  const [documents, setDocuments] = useState<DocumentItem[]>([]);
+  const [uploading, setUploading] = useState(false);
+  const [attachedFile, setAttachedFile] = useState<File | null>(null);
+  const fileInputRef = useRef<HTMLInputElement>(null);
+  const chatFileInputRef = useRef<HTMLInputElement>(null);
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
 
+  // Keep activeConvId and locale in refs so the transport closure always sees latest values
+  const activeConvIdRef = useRef<number | null>(null);
+  const localeRef = useRef(locale);
+  useEffect(() => { activeConvIdRef.current = activeConvId; }, [activeConvId]);
+  useEffect(() => { localeRef.current = locale; }, [locale]);
+
+  // Ref to trigger conversation list refresh after AI finishes
+  const loadConversationsRef = useRef<() => void>(() => {});
+
   const transportRef = useRef(new DefaultChatTransport({
     api: '/api/chat',
-    body: { conversationId: activeConvId },
+    body: () => ({ conversationId: activeConvIdRef.current, locale: localeRef.current }),
+    fetch: async (url, init) => {
+      const res = await fetch(url as string, init);
+      const convId = res.headers.get('X-Conversation-Id');
+      if (convId) {
+        const id = parseInt(convId);
+        setActiveConvId(id);
+        activeConvIdRef.current = id;
+      }
+      return res;
+    },
   }));
-
-  useEffect(() => {
-    transportRef.current = new DefaultChatTransport({
-      api: '/api/chat',
-      body: { conversationId: activeConvId },
-    });
-  }, [activeConvId]);
 
   const { messages, sendMessage, status, setMessages } = useChat({
     transport: transportRef.current,
@@ -67,11 +85,51 @@ export default function Home() {
     });
   }, [user]);
 
+  // Keep ref in sync so the fetch closure can call it
+  useEffect(() => { loadConversationsRef.current = loadConversations; }, [loadConversations]);
+
   useEffect(() => { loadConversations(); }, [loadConversations]);
 
+  // Reload sidebar after each AI response completes
   useEffect(() => {
     if (status === 'ready' && user && messages.length > 0) loadConversations();
   }, [status, user, messages.length, loadConversations]);
+
+  // Load documents
+  const loadDocuments = useCallback(() => {
+    if (!user) return;
+    fetch('/api/documents').then(r => r.json()).then(d => {
+      if (d.documents) setDocuments(d.documents);
+    });
+  }, [user]);
+
+  useEffect(() => { loadDocuments(); }, [loadDocuments]);
+
+  const handleFileUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file || !user) return;
+    setUploading(true);
+    try {
+      const formData = new FormData();
+      formData.append('file', file);
+      const res = await fetch('/api/documents', { method: 'POST', body: formData });
+      if (res.ok) {
+        loadDocuments();
+      }
+    } finally {
+      setUploading(false);
+      if (fileInputRef.current) fileInputRef.current.value = '';
+    }
+  };
+
+  const handleDeleteDoc = async (id: number) => {
+    await fetch('/api/documents', {
+      method: 'DELETE',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ id }),
+    });
+    loadDocuments();
+  };
 
   // Auto-scroll
   useEffect(() => {
@@ -84,10 +142,34 @@ export default function Home() {
     if (ta) { ta.style.height = 'auto'; ta.style.height = Math.min(ta.scrollHeight, 200) + 'px'; }
   }, [input]);
 
-  const handleSubmit = (e: FormEvent) => {
+  const handleSubmit = async (e: FormEvent) => {
     e.preventDefault();
-    if (!input.trim() || isLoading) return;
-    sendMessage({ text: input.trim() });
+    if ((!input.trim() && !attachedFile) || isLoading) return;
+
+    let fileLabel = '';
+
+    // Upload attached file first
+    if (attachedFile && user) {
+      setUploading(true);
+      try {
+        const formData = new FormData();
+        formData.append('file', attachedFile);
+        const res = await fetch('/api/documents', { method: 'POST', body: formData });
+        if (res.ok) {
+          const data = await res.json();
+          fileLabel = `[${attachedFile.name}] `;
+          loadDocuments();
+        }
+      } finally {
+        setUploading(false);
+        setAttachedFile(null);
+        if (chatFileInputRef.current) chatFileInputRef.current.value = '';
+      }
+    }
+
+    const text = (fileLabel + input.trim()).trim();
+    if (!text) return;
+    sendMessage({ text });
     setInput('');
     if (textareaRef.current) textareaRef.current.style.height = 'auto';
   };
@@ -298,6 +380,74 @@ export default function Home() {
           )}
         </div>
 
+        {/* Documents section */}
+        {user && (
+          <div className="px-2 pb-2" style={{ borderTop: '1px solid var(--sidebar-border)' }}>
+            <div className="flex items-center justify-between px-2 py-2">
+              <p className="text-xs font-semibold uppercase tracking-wider" style={{ color: 'var(--sidebar-text-muted)' }}>
+                {t('doc.myDocuments')}
+              </p>
+              <button
+                onClick={() => fileInputRef.current?.click()}
+                disabled={uploading}
+                className="text-xs px-2 py-1 rounded-md transition-colors"
+                style={{ color: 'var(--gold)', background: 'var(--sidebar-hover)' }}
+              >
+                {uploading ? t('doc.uploading') : '+ ' + t('doc.upload')}
+              </button>
+              <input
+                ref={fileInputRef}
+                type="file"
+                accept=".pdf,.txt,.md,.csv"
+                onChange={handleFileUpload}
+                className="hidden"
+              />
+            </div>
+            {documents.length > 0 ? (
+              <div className="space-y-0.5 max-h-32 overflow-y-auto sidebar-scroll">
+                {documents.map(doc => (
+                  <div
+                    key={doc.id}
+                    className="group flex items-center gap-2 px-2 py-1.5 rounded-lg"
+                    style={{ color: 'var(--sidebar-text)' }}
+                    onMouseEnter={e => e.currentTarget.style.background = 'var(--sidebar-hover)'}
+                    onMouseLeave={e => e.currentTarget.style.background = 'transparent'}
+                  >
+                    <span className="text-sm flex-shrink-0">
+                      {doc.filename.endsWith('.pdf') ? '📄' : '📝'}
+                    </span>
+                    <div className="flex-1 min-w-0">
+                      <p className="text-xs truncate">{doc.filename}</p>
+                      {doc.total_pages && (
+                        <p className="text-xs" style={{ color: 'var(--sidebar-text-muted)' }}>
+                          {doc.total_pages} {t('doc.pages')}
+                        </p>
+                      )}
+                    </div>
+                    <button
+                      onClick={() => handleDeleteDoc(doc.id)}
+                      className="w-6 h-6 rounded flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity flex-shrink-0"
+                      style={{ color: 'var(--sidebar-text-muted)' }}
+                      title={t('sidebar.delete')}
+                    >
+                      <svg className="w-3 h-3" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="2">
+                        <path strokeLinecap="round" strokeLinejoin="round" d="M6 18L18 6M6 6l12 12" />
+                      </svg>
+                    </button>
+                  </div>
+                ))}
+              </div>
+            ) : (
+              <p className="text-center text-xs py-2" style={{ color: 'var(--sidebar-text-muted)' }}>
+                {t('doc.noDocuments')}
+              </p>
+            )}
+            <p className="text-center text-xs mt-1 pb-1" style={{ color: 'var(--sidebar-text-muted)', opacity: 0.6 }}>
+              {t('doc.supportedFormats')}
+            </p>
+          </div>
+        )}
+
         {/* Sidebar bottom - user */}
         <div className="p-3" style={{ borderTop: '1px solid var(--sidebar-border)' }}>
           {user ? (
@@ -427,14 +577,61 @@ export default function Home() {
         <div className="flex-shrink-0 px-4 md:px-8 pb-4 pt-2">
           <div className="max-w-3xl mx-auto">
             <form onSubmit={handleSubmit} className="relative">
+              {/* Attached file preview */}
+              {attachedFile && (
+                <div
+                  className="flex items-center gap-2 px-4 py-2 mb-1 rounded-t-2xl text-sm"
+                  style={{ background: 'var(--background-alt)', borderBottom: '1px solid var(--border-light)' }}
+                >
+                  <span>{attachedFile.name.endsWith('.pdf') ? '📄' : '📝'}</span>
+                  <span className="truncate flex-1" style={{ color: 'var(--foreground)' }}>{attachedFile.name}</span>
+                  <span className="text-xs" style={{ color: 'var(--foreground-muted)' }}>
+                    {(attachedFile.size / 1024).toFixed(0)} KB
+                  </span>
+                  <button
+                    type="button"
+                    onClick={() => { setAttachedFile(null); if (chatFileInputRef.current) chatFileInputRef.current.value = ''; }}
+                    className="w-5 h-5 rounded-full flex items-center justify-center"
+                    style={{ color: 'var(--foreground-muted)', background: 'var(--border-light)' }}
+                  >
+                    <svg className="w-3 h-3" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="2.5">
+                      <path strokeLinecap="round" strokeLinejoin="round" d="M6 18L18 6M6 6l12 12" />
+                    </svg>
+                  </button>
+                </div>
+              )}
               <div
                 className="flex items-end rounded-2xl transition-shadow"
                 style={{
                   background: 'var(--background-alt)',
                   border: '1px solid var(--border)',
                   boxShadow: '0 2px 12px rgba(0,0,0,0.04)',
+                  ...(attachedFile ? { borderTopLeftRadius: 0, borderTopRightRadius: 0 } : {}),
                 }}
               >
+                {/* Paperclip / attach file button */}
+                <input
+                  ref={chatFileInputRef}
+                  type="file"
+                  accept=".pdf,.txt,.md,.csv"
+                  onChange={e => {
+                    const f = e.target.files?.[0];
+                    if (f) setAttachedFile(f);
+                  }}
+                  className="hidden"
+                />
+                <button
+                  type="button"
+                  onClick={() => chatFileInputRef.current?.click()}
+                  disabled={uploading || !user}
+                  className="ml-2 mb-3 w-9 h-9 rounded-lg flex items-center justify-center transition-colors disabled:opacity-30 flex-shrink-0"
+                  style={{ color: 'var(--foreground-muted)' }}
+                  title={user ? t('doc.upload') : t('doc.loginToUpload')}
+                >
+                  <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="1.5">
+                    <path strokeLinecap="round" strokeLinejoin="round" d="M18.375 12.739l-7.693 7.693a4.5 4.5 0 01-6.364-6.364l10.94-10.94A3 3 0 1119.5 7.372L8.552 18.32m.009-.01l-.01.01m5.699-9.941l-7.81 7.81a1.5 1.5 0 002.112 2.13" />
+                  </svg>
+                </button>
                 <textarea
                   ref={textareaRef}
                   value={input}
@@ -442,7 +639,7 @@ export default function Home() {
                   onKeyDown={handleKeyDown}
                   placeholder={t('chat.placeholder')}
                   rows={1}
-                  className="flex-1 bg-transparent px-5 py-4 text-base resize-none focus:outline-none"
+                  className="flex-1 bg-transparent px-3 py-4 text-base resize-none focus:outline-none"
                   style={{
                     color: 'var(--foreground)',
                     minHeight: '52px',
@@ -451,14 +648,14 @@ export default function Home() {
                 />
                 <button
                   type="submit"
-                  disabled={!input.trim() || isLoading}
+                  disabled={(!input.trim() && !attachedFile) || isLoading || uploading}
                   className="m-2 w-10 h-10 rounded-xl flex items-center justify-center transition-all disabled:opacity-30 flex-shrink-0"
                   style={{
-                    background: input.trim() && !isLoading ? 'var(--foreground)' : 'var(--border)',
-                    color: input.trim() && !isLoading ? 'var(--background)' : 'var(--foreground-muted)',
+                    background: (input.trim() || attachedFile) && !isLoading ? 'var(--foreground)' : 'var(--border)',
+                    color: (input.trim() || attachedFile) && !isLoading ? 'var(--background)' : 'var(--foreground-muted)',
                   }}
                 >
-                  {isLoading ? (
+                  {isLoading || uploading ? (
                     <svg className="w-4 h-4 animate-spin" viewBox="0 0 24 24" fill="none">
                       <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="3" />
                       <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z" />

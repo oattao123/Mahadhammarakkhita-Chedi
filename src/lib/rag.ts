@@ -1,43 +1,50 @@
 /**
  * Retrieval-Augmented Generation (RAG) Module
  *
- * Retrieves relevant Tipitaka context for the AI to reference.
- * In production, this would use vector embeddings + pgvector for semantic search.
+ * Retrieves relevant context from:
+ * 1. Built-in Tipitaka knowledge base
+ * 2. User-uploaded documents (with file + page references)
  */
 
 import { searchTipitaka, type TipitakaEntry } from './tipitaka-data';
 import { getPaliContext } from './pali-segmenter';
+import { searchDocumentChunksMulti, type DocumentChunk } from './db';
+
+export interface RAGSource {
+  title: string;
+  source: string;
+  id: string;
+}
+
+export interface DocumentSource {
+  filename: string;
+  pageNumber: number | null;
+  chunkIndex: number;
+  excerpt: string;
+}
 
 export interface RAGResult {
   context: string;
-  sources: Array<{
-    title: string;
-    source: string;
-    id: string;
-  }>;
+  sources: RAGSource[];
+  documentSources: DocumentSource[];
 }
 
 /**
- * Retrieve relevant context from the Tipitaka knowledge base.
+ * Retrieve relevant context from the Tipitaka knowledge base only (no user documents).
  */
 export function retrieveContext(query: string): RAGResult {
-  // Get Pali term analysis
   const paliContext = getPaliContext(query);
-
-  // Search Tipitaka corpus
   const entries = searchTipitaka(query, 3);
 
   if (entries.length === 0) {
     return {
       context: paliContext || '',
       sources: [],
+      documentSources: [],
     };
   }
 
-  const context = entries
-    .map(formatEntry)
-    .join('\n\n---\n\n');
-
+  const context = entries.map(formatEntry).join('\n\n---\n\n');
   const fullContext = paliContext
     ? `การวิเคราะห์คำบาลี: ${paliContext}\n\n${context}`
     : context;
@@ -49,6 +56,52 @@ export function retrieveContext(query: string): RAGResult {
       source: e.source,
       id: e.id,
     })),
+    documentSources: [],
+  };
+}
+
+/**
+ * Retrieve context from both Tipitaka AND user-uploaded documents.
+ */
+export async function retrieveContextWithDocuments(
+  query: string,
+  userId: number
+): Promise<RAGResult> {
+  // Get standard Tipitaka context
+  const base = retrieveContext(query);
+
+  // Search user's uploaded documents
+  let documentSources: DocumentSource[] = [];
+  let docContext = '';
+
+  try {
+    const chunks = await searchDocumentChunksMulti(userId, query, 5);
+
+    if (chunks.length > 0) {
+      documentSources = chunks.map(chunk => ({
+        filename: chunk.filename,
+        pageNumber: chunk.page_number,
+        chunkIndex: chunk.chunk_index,
+        excerpt: chunk.content.slice(0, 150) + (chunk.content.length > 150 ? '...' : ''),
+      }));
+
+      docContext = chunks.map((chunk, i) => {
+        const pageRef = chunk.page_number ? ` (หน้า ${chunk.page_number})` : '';
+        return `📄 [${chunk.filename}${pageRef}]\n${chunk.content}`;
+      }).join('\n\n---\n\n');
+    }
+  } catch {
+    // If document search fails, continue with just Tipitaka context
+  }
+
+  const fullContext = docContext
+    ? `${base.context}\n\n===== เอกสารที่ผู้ใช้อัปโหลด =====\n\n${docContext}`
+    : base.context;
+
+  return {
+    context: fullContext,
+    sources: base.sources,
+    documentSources,
   };
 }
 

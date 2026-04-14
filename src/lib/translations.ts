@@ -74,6 +74,18 @@ export const translations = {
     'auth.continueWithGoogle': 'ดำเนินการต่อด้วย Google',
     'auth.or': 'หรือ',
     'auth.oauthError': 'เข้าสู่ระบบด้วย Google ไม่สำเร็จ กรุณาลองใหม่',
+
+    // Documents
+    'doc.upload': 'อัปโหลดเอกสาร',
+    'doc.uploading': 'กำลังอัปโหลด...',
+    'doc.uploadSuccess': 'อัปโหลดสำเร็จ',
+    'doc.uploadError': 'อัปโหลดไม่สำเร็จ',
+    'doc.myDocuments': 'เอกสารของฉัน',
+    'doc.noDocuments': 'ยังไม่มีเอกสาร',
+    'doc.pages': 'หน้า',
+    'doc.deleteConfirm': 'ลบเอกสารนี้?',
+    'doc.supportedFormats': 'รองรับ PDF, TXT, MD',
+    'doc.loginToUpload': 'เข้าสู่ระบบเพื่ออัปโหลดเอกสาร',
   },
 
   en: {
@@ -149,6 +161,18 @@ export const translations = {
     'auth.continueWithGoogle': 'Continue with Google',
     'auth.or': 'or',
     'auth.oauthError': 'Google sign-in failed. Please try again.',
+
+    // Documents
+    'doc.upload': 'Upload Document',
+    'doc.uploading': 'Uploading...',
+    'doc.uploadSuccess': 'Uploaded successfully',
+    'doc.uploadError': 'Upload failed',
+    'doc.myDocuments': 'My Documents',
+    'doc.noDocuments': 'No documents yet',
+    'doc.pages': 'pages',
+    'doc.deleteConfirm': 'Delete this document?',
+    'doc.supportedFormats': 'Supports PDF, TXT, MD',
+    'doc.loginToUpload': 'Log in to upload documents',
   },
 } as const;
 
