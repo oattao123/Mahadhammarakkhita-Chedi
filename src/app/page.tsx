@@ -703,16 +703,79 @@ function Avatar({ role }: { role: string }) {
 
 function MessageRow({ message }: { message: { id: string; role: string; parts?: Array<{ type: string; text?: string }> } }) {
   const { t } = useLanguage();
+  const [speaking, setSpeaking] = useState(false);
   const text = message.parts?.filter(p => p.type === 'text').map(p => p.text).join('') || '';
   const isUser = message.role === 'user';
+  const hasThai = /[\u0E00-\u0E7F]/.test(text);
+
+  const handleSpeak = async () => {
+    if (speaking) {
+      window.speechSynthesis.cancel();
+      setSpeaking(false);
+      return;
+    }
+
+    try {
+      // Get Thai phonetic reading from API
+      const res = await fetch('/api/pali-read', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ text }),
+      });
+      const data = await res.json();
+      const readingText = data.thaiReading || text;
+
+      const utterance = new SpeechSynthesisUtterance(readingText);
+      utterance.lang = 'th-TH';
+      utterance.rate = 0.8;
+
+      // Try to find a Thai voice
+      const voices = window.speechSynthesis.getVoices();
+      const thaiVoice = voices.find(v => v.lang.startsWith('th'));
+      if (thaiVoice) utterance.voice = thaiVoice;
+
+      utterance.onend = () => setSpeaking(false);
+      utterance.onerror = () => setSpeaking(false);
+
+      setSpeaking(true);
+      window.speechSynthesis.speak(utterance);
+    } catch {
+      setSpeaking(false);
+    }
+  };
 
   return (
     <div className={`flex gap-4 animate-fade-in ${isUser ? 'msg-user' : ''}`}>
       <Avatar role={message.role} />
       <div className="flex-1 min-w-0 pt-0.5">
-        <p className="text-xs font-medium mb-1.5" style={{ color: 'var(--foreground-muted)' }}>
-          {isUser ? t('chat.you') : t('chat.assistant')}
-        </p>
+        <div className="flex items-center gap-2 mb-1.5">
+          <p className="text-xs font-medium" style={{ color: 'var(--foreground-muted)' }}>
+            {isUser ? t('chat.you') : t('chat.assistant')}
+          </p>
+          {hasThai && (
+            <button
+              onClick={handleSpeak}
+              className="flex items-center gap-1 px-2 py-0.5 rounded-full text-xs transition-colors"
+              style={{
+                color: speaking ? '#fff' : 'var(--gold)',
+                background: speaking ? 'var(--gold)' : 'var(--gold-subtle)',
+              }}
+              title={speaking ? t('pali.stop') : t('pali.speak')}
+            >
+              {speaking ? (
+                <>
+                  <svg className="w-3 h-3" fill="currentColor" viewBox="0 0 24 24"><rect x="6" y="4" width="4" height="16" rx="1"/><rect x="14" y="4" width="4" height="16" rx="1"/></svg>
+                  <span>{t('pali.speaking')}</span>
+                </>
+              ) : (
+                <>
+                  <svg className="w-3 h-3" fill="currentColor" viewBox="0 0 24 24"><path d="M3 9v6h4l5 5V4L7 9H3zm13.5 3A4.5 4.5 0 0014 8.5v7a4.49 4.49 0 002.5-3.5zM14 3.23v2.06a6.51 6.51 0 010 13.42v2.06A8.52 8.52 0 0022.5 12 8.52 8.52 0 0014 3.23z"/></svg>
+                  <span>{t('pali.speak')}</span>
+                </>
+              )}
+            </button>
+          )}
+        </div>
         <div className="msg-content">
           {isUser ? <p>{text}</p> : <RenderMarkdown text={text} />}
         </div>

@@ -14,11 +14,17 @@ interface GoogleUserInfo {
   name: string;
 }
 
-export async function GET(req: NextRequest) {
-  const appUrl = process.env.APP_URL;
-  if (!appUrl) {
-    return NextResponse.json({ error: 'APP_URL not configured' }, { status: 500 });
+function getAppUrl(req: NextRequest): string {
+  if (process.env.APP_URL && process.env.APP_URL !== 'http://localhost:3000') {
+    return process.env.APP_URL;
   }
+  const host = req.headers.get('x-forwarded-host') || req.headers.get('host') || 'localhost:3000';
+  const proto = req.headers.get('x-forwarded-proto') || 'http';
+  return `${proto}://${host}`;
+}
+
+export async function GET(req: NextRequest) {
+  const appUrl = getAppUrl(req);
 
   const { searchParams } = req.nextUrl;
   const code = searchParams.get('code');

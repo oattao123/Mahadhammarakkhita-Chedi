@@ -1,13 +1,23 @@
-import { NextResponse } from 'next/server';
+import { NextRequest, NextResponse } from 'next/server';
 import crypto from 'crypto';
 
-export async function GET() {
-  const clientId = process.env.GOOGLE_CLIENT_ID;
-  const appUrl = process.env.APP_URL;
+function getAppUrl(req: NextRequest): string {
+  // Use APP_URL if set, otherwise derive from request headers
+  if (process.env.APP_URL && process.env.APP_URL !== 'http://localhost:3000') {
+    return process.env.APP_URL;
+  }
+  const host = req.headers.get('x-forwarded-host') || req.headers.get('host') || 'localhost:3000';
+  const proto = req.headers.get('x-forwarded-proto') || 'http';
+  return `${proto}://${host}`;
+}
 
-  if (!clientId || !appUrl) {
+export async function GET(req: NextRequest) {
+  const clientId = process.env.GOOGLE_CLIENT_ID;
+  if (!clientId) {
     return NextResponse.json({ error: 'Google OAuth not configured' }, { status: 500 });
   }
+
+  const appUrl = getAppUrl(req);
 
   // Generate random state to prevent CSRF
   const state = crypto.randomBytes(16).toString('hex');
@@ -27,7 +37,7 @@ export async function GET() {
   );
   response.cookies.set('oauth_state', state, {
     httpOnly: true,
-    secure: process.env.NODE_ENV === 'production',
+    secure: appUrl.startsWith('https'),
     sameSite: 'lax',
     maxAge: 600,
     path: '/',

@@ -86,6 +86,11 @@ export const translations = {
     'doc.deleteConfirm': 'ลบเอกสารนี้?',
     'doc.supportedFormats': 'รองรับ PDF, TXT, MD',
     'doc.loginToUpload': 'เข้าสู่ระบบเพื่ออัปโหลดเอกสาร',
+
+    // Pali Reader
+    'pali.speak': 'อ่านออกเสียงบาลี',
+    'pali.stop': 'หยุดอ่าน',
+    'pali.speaking': 'กำลังอ่าน...',
   },
 
   en: {
@@ -173,6 +178,11 @@ export const translations = {
     'doc.deleteConfirm': 'Delete this document?',
     'doc.supportedFormats': 'Supports PDF, TXT, MD',
     'doc.loginToUpload': 'Log in to upload documents',
+
+    // Pali Reader
+    'pali.speak': 'Read Pali aloud',
+    'pali.stop': 'Stop reading',
+    'pali.speaking': 'Reading...',
   },
 } as const;
 
