@@ -35,10 +35,11 @@ export async function GET(req: NextRequest) {
   const response = NextResponse.redirect(
     `https://accounts.google.com/o/oauth2/v2/auth?${params}`
   );
+  const isSecure = appUrl.startsWith('https');
   response.cookies.set('oauth_state', state, {
     httpOnly: true,
-    secure: appUrl.startsWith('https'),
-    sameSite: 'lax',
+    secure: isSecure,
+    sameSite: isSecure ? 'none' : 'lax',
     maxAge: 600,
     path: '/',
   });
