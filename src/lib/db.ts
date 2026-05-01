@@ -337,4 +337,91 @@ export async function deleteDocument(id: number, userId: number): Promise<void> 
   if (error) throw new Error(`Failed to delete document: ${error.message}`);
 }
 
+// ==================== Dataset (system-wide) document operations ====================
+
+const SYSTEM_USER_ID = 0; // Special user_id for system/dataset documents
+
+export async function createDatasetDocument(
+  filename: string,
+  fileType: string,
+  totalPages: number | null,
+  sourcePath: string
+): Promise<Document> {
+  // Check if already ingested by source_path
+  const { data: existing } = await supabase
+    .from('documents')
+    .select('id')
+    .eq('user_id', SYSTEM_USER_ID)
+    .eq('filename', filename)
+    .limit(1);
+
+  if (existing && existing.length > 0) {
+    return existing[0] as unknown as Document;
+  }
+
+  const { data, error } = await supabase
+    .from('documents')
+    .insert({ user_id: SYSTEM_USER_ID, filename, file_type: fileType, total_pages: totalPages })
+    .select()
+    .single();
+
+  if (error) throw new Error(`Failed to create dataset document: ${error.message}`);
+  return data as Document;
+}
+
+export async function getDatasetDocumentCount(): Promise<number> {
+  const { count, error } = await supabase
+    .from('documents')
+    .select('*', { count: 'exact', head: true })
+    .eq('user_id', SYSTEM_USER_ID);
+
+  if (error) return 0;
+  return count ?? 0;
+}
+
+export async function getDatasetDocumentNames(): Promise<string[]> {
+  const { data, error } = await supabase
+    .from('documents')
+    .select('filename')
+    .eq('user_id', SYSTEM_USER_ID);
+
+  if (error) return [];
+  return (data ?? []).map((d: { filename: string }) => d.filename);
+}
+
+/** Search dataset documents (system-wide, accessible by all users) */
+export async function searchDatasetChunksMulti(
+  query: string,
+  topK: number = 5
+): Promise<(DocumentChunk & { filename: string; score: number })[]> {
+  const words = query.toLowerCase().split(/[\s,]+/).filter(w => w.length > 1);
+  if (words.length === 0) return [];
+
+  // Fetch dataset chunks (user_id = 0)
+  const { data, error } = await supabase
+    .from('document_chunks')
+    .select('*, documents!inner(filename, user_id)')
+    .eq('documents.user_id', SYSTEM_USER_ID)
+    .limit(1000);
+
+  if (error || !data || data.length === 0) return [];
+
+  const scored = data.map((row: any) => {
+    const contentLower = row.content.toLowerCase();
+    const keywordsLower = (row.keywords || '').toLowerCase();
+    let score = 0;
+    for (const word of words) {
+      if (keywordsLower.includes(word)) score += 10;
+      if (contentLower.includes(word)) score += 3;
+    }
+    return { ...row, filename: row.documents.filename, score };
+  });
+
+  return scored
+    .filter((r: any) => r.score > 0)
+    .sort((a: any, b: any) => b.score - a.score)
+    .slice(0, topK)
+    .map(({ documents, ...rest }: any) => rest);
+}
+
 export default supabase;

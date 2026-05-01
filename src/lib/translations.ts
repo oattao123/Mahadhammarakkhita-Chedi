@@ -58,6 +58,7 @@ export const translations = {
     'auth.noAccount': 'ยังไม่มีบัญชี? สร้างบัญชีใหม่',
     'auth.secureNote': 'ข้อมูลของท่านจะถูกเก็บรักษาอย่างปลอดภัย',
     'auth.connectionError': 'ไม่สามารถเชื่อมต่อเซิร์ฟเวอร์ได้',
+    'auth.serverError': 'เซิร์ฟเวอร์เกิดข้อผิดพลาด กรุณาลองใหม่อีกครั้ง',
     'auth.loginOrRegister': 'เข้าสู่ระบบ / สมัครสมาชิก',
     'auth.error': 'เกิดข้อผิดพลาด',
 
@@ -96,6 +97,15 @@ export const translations = {
     'pali.speaking': 'กำลังอ่าน...',
     'pali.loading': 'กำลังเตรียม...',
     'pali.speed': 'ความเร็ว',
+
+    // Dataset
+    'dataset.title': 'คลังข้อมูลธรรม',
+    'dataset.ingest': 'นำเข้าข้อมูล',
+    'dataset.ingesting': 'กำลังนำเข้า...',
+    'dataset.done': 'นำเข้าสำเร็จ',
+    'dataset.error': 'นำเข้าไม่สำเร็จ',
+    'dataset.count': 'เอกสาร',
+    'dataset.files': 'ไฟล์',
   },
 
   en: {
@@ -155,6 +165,7 @@ export const translations = {
     'auth.noAccount': "Don't have an account? Create one",
     'auth.secureNote': 'Your data is kept safe and secure.',
     'auth.connectionError': 'Cannot connect to server',
+    'auth.serverError': 'Server error. Please try again.',
     'auth.loginOrRegister': 'Log In / Register',
     'auth.error': 'An error occurred',
 
@@ -193,6 +204,15 @@ export const translations = {
     'pali.speaking': 'Reading...',
     'pali.loading': 'Preparing...',
     'pali.speed': 'Speed',
+
+    // Dataset
+    'dataset.title': 'Dhamma Library',
+    'dataset.ingest': 'Import Dataset',
+    'dataset.ingesting': 'Importing...',
+    'dataset.done': 'Import complete',
+    'dataset.error': 'Import failed',
+    'dataset.count': 'documents',
+    'dataset.files': 'files',
   },
 } as const;
 

@@ -62,7 +62,16 @@ function LoginForm() {
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(body),
       });
-      const data = await res.json();
+
+      let data;
+      try {
+        data = await res.json();
+      } catch {
+        // Server returned non-JSON (e.g. HTML error page)
+        setError(t('auth.serverError'));
+        return;
+      }
+
       if (!res.ok) { setError(data.error || t('auth.error')); return; }
       router.push('/');
       router.refresh();

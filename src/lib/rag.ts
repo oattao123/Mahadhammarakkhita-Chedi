@@ -8,7 +8,7 @@
 
 import { searchTipitaka, type TipitakaEntry } from './tipitaka-data';
 import { getPaliContext } from './pali-segmenter';
-import { searchDocumentChunksMulti, type DocumentChunk } from './db';
+import { searchDocumentChunksMulti, searchDatasetChunksMulti, type DocumentChunk } from './db';
 
 export interface RAGSource {
   title: string;
@@ -61,7 +61,7 @@ export function retrieveContext(query: string): RAGResult {
 }
 
 /**
- * Retrieve context from both Tipitaka AND user-uploaded documents.
+ * Retrieve context from both Tipitaka AND user-uploaded documents AND dataset documents.
  */
 export async function retrieveContextWithDocuments(
   query: string,
@@ -70,22 +70,30 @@ export async function retrieveContextWithDocuments(
   // Get standard Tipitaka context
   const base = retrieveContext(query);
 
-  // Search user's uploaded documents
   let documentSources: DocumentSource[] = [];
   let docContext = '';
 
   try {
-    const chunks = await searchDocumentChunksMulti(userId, query, 5);
+    // Search user's uploaded documents AND dataset (system) documents in parallel
+    const [userChunks, datasetChunks] = await Promise.all([
+      searchDocumentChunksMulti(userId, query, 5),
+      searchDatasetChunksMulti(query, 5),
+    ]);
 
-    if (chunks.length > 0) {
-      documentSources = chunks.map(chunk => ({
+    // Combine and deduplicate, keeping top results
+    const allChunks = [...userChunks, ...datasetChunks]
+      .sort((a, b) => b.score - a.score)
+      .slice(0, 8);
+
+    if (allChunks.length > 0) {
+      documentSources = allChunks.map(chunk => ({
         filename: chunk.filename,
         pageNumber: chunk.page_number,
         chunkIndex: chunk.chunk_index,
         excerpt: chunk.content.slice(0, 150) + (chunk.content.length > 150 ? '...' : ''),
       }));
 
-      docContext = chunks.map((chunk, i) => {
+      docContext = allChunks.map((chunk) => {
         const pageRef = chunk.page_number ? ` (หน้า ${chunk.page_number})` : '';
         return `📄 [${chunk.filename}${pageRef}]\n${chunk.content}`;
       }).join('\n\n---\n\n');
@@ -95,7 +103,7 @@ export async function retrieveContextWithDocuments(
   }
 
   const fullContext = docContext
-    ? `${base.context}\n\n===== เอกสารที่ผู้ใช้อัปโหลด =====\n\n${docContext}`
+    ? `${base.context}\n\n===== เอกสารอ้างอิง =====\n\n${docContext}`
     : base.context;
 
   return {
