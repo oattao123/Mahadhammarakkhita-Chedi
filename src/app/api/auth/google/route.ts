@@ -2,10 +2,6 @@ import { NextRequest, NextResponse } from 'next/server';
 import crypto from 'crypto';
 
 function getAppUrl(req: NextRequest): string {
-  // Use APP_URL if set, otherwise derive from request headers
-  if (process.env.APP_URL && process.env.APP_URL !== 'http://localhost:3000') {
-    return process.env.APP_URL;
-  }
   const host = req.headers.get('x-forwarded-host') || req.headers.get('host') || 'localhost:3000';
   const proto = req.headers.get('x-forwarded-proto') || 'http';
   return `${proto}://${host}`;
